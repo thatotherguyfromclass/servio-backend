@@ -116,33 +116,64 @@ export const getServices = async (req, res) => {
       city,
       minPrice,
       maxPrice,
-      username, // 👈 ADD THIS
+      username,
       page = 1,
     } = req.query;
 
     const limit = 10;
-    const offset = (page - 1) * limit;
+
+    const offset =
+      (page - 1) * limit;
 
     let query = `
       SELECT
         services.*,
+
         users.username,
         users.profile_image,
-        categories.name AS category_name,
-        categories.slug AS category_slug
+
+        categories.name
+        AS category_name,
+
+        categories.slug
+        AS category_slug,
+
+        COALESCE(
+          ROUND(
+            AVG(reviews.rating)::numeric,
+            1
+          ),
+          0
+        ) AS average_rating,
+
+        COUNT(reviews.id)
+        AS total_reviews
+
       FROM services
-      JOIN users ON services.user_id = users.id
-      JOIN categories ON services.category_id = categories.id
+
+      JOIN users
+      ON services.user_id = users.id
+
+      JOIN categories
+      ON services.category_id = categories.id
+
+      LEFT JOIN reviews
+      ON reviews.service_id = services.id
+
       WHERE 1=1
     `;
 
     const values = [];
+
     let index = 1;
 
-    // 🔥 ADD THIS BLOCK
     if (username) {
-      query += ` AND users.username = $${index}`;
+      query += `
+        AND users.username = $${index}
+      `;
+
       values.push(username);
+
       index++;
     }
 
@@ -154,54 +185,92 @@ export const getServices = async (req, res) => {
           OR categories.name ILIKE $${index}
         )
       `;
+
       values.push(`%${search}%`);
+
       index++;
     }
 
     if (category) {
-      query += ` AND categories.slug = $${index}`;
+      query += `
+        AND categories.slug = $${index}
+      `;
+
       values.push(category);
+
       index++;
     }
 
     if (state) {
-      query += ` AND services.state ILIKE $${index}`;
-      values.push(state);
+      query += `
+        AND services.state ILIKE $${index}
+      `;
+
+      values.push(`%${state}%`);
+
       index++;
     }
 
     if (city) {
-      query += ` AND services.city ILIKE $${index}`;
-      values.push(city);
+      query += `
+        AND services.city ILIKE $${index}
+      `;
+
+      values.push(`%${city}%`);
+
       index++;
     }
 
     if (minPrice) {
-      query += ` AND services.price >= $${index}`;
+      query += `
+        AND services.price >= $${index}
+      `;
+
       values.push(minPrice);
+
       index++;
     }
 
     if (maxPrice) {
-      query += ` AND services.price <= $${index}`;
+      query += `
+        AND services.price <= $${index}
+      `;
+
       values.push(maxPrice);
+
       index++;
     }
 
     query += `
+      GROUP BY
+        services.id,
+        users.username,
+        users.profile_image,
+        categories.name,
+        categories.slug
+
       ORDER BY services.created_at DESC
+
       LIMIT $${index}
       OFFSET $${index + 1}
     `;
 
     values.push(limit, offset);
 
-    const services = await pool.query(query, values);
+    const services =
+      await pool.query(
+        query,
+        values
+      );
 
     res.json(services.rows);
   } catch (error) {
     console.log(error);
-    res.status(500).json({ message: "Server error" });
+
+    res.status(500).json({
+      message:
+        "Server error",
+    });
   }
 };
 
