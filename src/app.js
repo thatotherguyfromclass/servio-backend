@@ -9,6 +9,7 @@ import serviceRoutes from "./routes/service.routes.js";
 import reviewRoutes from "./routes/review.routes.js";
 
 const app = express();
+app.set("trust proxy", 1);
 
 app.use(express.json());
 
